@@ -1,6 +1,6 @@
 # image2gd
 
-Integrated GD Mod to import images to gd levels using [geometrize](https://www.geometrize.co.uk/).
+Integrated gd mod to import images to gd levels using [geometrize](https://www.geometrize.co.uk/).
 
 # Download
 
