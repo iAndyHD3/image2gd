@@ -17,7 +17,7 @@ Relases
 - Open level settings and click on import image
 - Select image and change settings
 - Wait for the image to process
-- A info box will pop up when it's done
+- Am info box will pop up when it's done
 
 # Credits
 
