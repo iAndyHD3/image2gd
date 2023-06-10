@@ -46,18 +46,11 @@ void addCircle(LevelEditorLayer* self, const geometrize::ShapeResult& result)
 	//https://wyliemaster.github.io/gddocs/#/resources/client/level-components/level-object?id=level-object
 	std::string str = fmt::format(
 		"1,{},2,{},3,{},32,{},41,1,42,1,43,{},44,{},25,{},21,{},20,{}",
-		CIRCLE_ID, x, y, scale, hsv_string, hsv_string, Z_ORDER, COLOR_CHANNEL, Z_LAYER
+		CIRCLE_ID, x, y, scale, hsv_string, hsv_string, Z_ORDER, 1010, Z_LAYER
 	);
 	//fmt::println("{}", str);
 	
 	self->addObjectFromString(str);
-	
-	if(Z_ORDER == 0)
-	{
-		ColorAction* colorAction = GameManager::sharedState()->getEditorLayer()->m_pLevelSettings->m_pEffectManager->getColorAction(COLOR_CHANNEL);
-		colorAction->m_color = { 0, 0, 0};
-	}
-	
 	Z_ORDER++;
 }
 

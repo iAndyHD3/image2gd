@@ -10,7 +10,6 @@ inline std::mutex SHAPE_LOCK;
 inline int SHAPES_DONE = 0;
 inline int Z_ORDER = 0;
 inline int DRAW_SCALE = 1;
-inline int COLOR_CHANNEL = 1;
 inline int Z_LAYER = 0;
 
 namespace image2gd

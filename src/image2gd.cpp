@@ -195,10 +195,6 @@ void image2gd::addImage()
 		return;
 	}
 	
-	if(!handle_int_input(COLOR_CHANNEL, "The gd color channel that will be used\n (needs to be set to black, will be auto set)", "Color Channel", "1")) {
-		return;
-	}
-	
 	if(!handle_int_input(Z_LAYER, "The gd z layer where objects will be created", "Z Layer", "0", 0)) {
 		return;
 	}
