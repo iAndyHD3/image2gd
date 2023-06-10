@@ -120,7 +120,7 @@ bool __fastcall LevelSettingsLayer_initH(CCLayer* self, void* edx, void* setting
 
 void mod_main(HMODULE)
 {
-	matdash::create_console();
+	//matdash::create_console();
 	MH_Initialize();
 	
 	//matdash breaks with update functions so im afraid to use it now

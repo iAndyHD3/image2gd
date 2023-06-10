@@ -36,7 +36,7 @@ add_requires("fmt")
 
 includes("**/xmake.lua") -- recursively add files through pattern matching
 
-target("gdaml") --dll name and target name
+target("image2gd") --dll name and target name
 	set_default(true)
 	set_kind("shared")
 	add_packages("fmt")
