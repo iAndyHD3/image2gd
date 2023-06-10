@@ -12,7 +12,7 @@ namespace gd {
         float hue; //0x00F8
         float saturation; //0x00FC
         float brightness; //0x0100
-        bool saturationChecked; //0x0104
+        bool usesHSV; //0x0104
         bool brightnessChecked; //0x0105
         PAD(2);
         bool unk_108;

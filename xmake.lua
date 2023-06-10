@@ -19,7 +19,7 @@ add_rules("mode.releasedbg")
 set_allowedarchs("windows|x86") --allow only windows x86
 set_defaultarchs("windows|x86") --set default windows x86
 set_allowedmodes("release", "releasedbg") --allow only Release and RelWithDebInfo
-set_languages("c++20") --set c++20
+set_languages("c++23") --set c++20
 
 
 --create options with loop and array
@@ -36,19 +36,24 @@ add_requires("fmt")
 
 includes("**/xmake.lua") -- recursively add files through pattern matching
 
-target("gdmod") --dll name and target name
+target("gdaml") --dll name and target name
 	set_default(true)
 	set_kind("shared")
-	add_files("src/*.cpp")
 	add_packages("fmt")
 	add_deps("cocos-headers")
 	add_deps("mat-dash")
 	add_deps("gd.h")
 	set_rundir("/bin")
+	add_files("src/*.cpp")
+	add_syslinks("Comdlg32")
+	add_syslinks("Advapi32")
+	add_syslinks("User32")
+	add_syslinks("Shell32")
+
 	
 	--add minhook manually here since it doesnt seem to work when added with target
-	add_includedirs("libs/minhook/include")
-	add_files("libs/minhook/src/**.c")
+	add_includedirs("libs/minhook/include", "libs/stb", "libs/geometrize")
+	add_files("libs/minhook/src/**.c", "libs/geometrize/**.cpp")
 	
 	--this will run when xmake run gdmod is called
 	on_run(function (target)

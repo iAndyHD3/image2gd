@@ -1,80 +1,149 @@
+
+
 #include <matdash.hpp>
-
-// defines add_hook to use minhook
 #include <matdash/minhook.hpp>
-
-// lets you use mod_main
 #include <matdash/boilerplate.hpp>
+#include <matdash/console.hpp>
 
 #include <fmt/format.h>
 #include <gd.h>
 
+#include "image2gd.h"
+
+#include "geometrize/shape/circle.h"
+#include "geometrize/bitmap/rgba.h"
+#include "geometrize/shaperesult.h"
+
+
+#define MEMBERBYOFFSET(type, class, offset) *reinterpret_cast<type*>(reinterpret_cast<uintptr_t>(class) + offset)
+#define MBO MEMBERBYOFFSET
+
 using namespace gd;
 using namespace cocos2d;
 
-#define USE_WIN32_CONSOLE
 
-class MenuLayerMod : public MenuLayer {
-public:
-	// here the name cant be `init` as that would make it a virtual
-	// which doesnt work with the current code
-	bool init_() {
-		if (!matdash::orig<&MenuLayerMod::init_>(this)) return false;
-		
-		std::string str = fmt::format("Hello from {}", "xmake");
-		auto label = CCLabelBMFont::create(str.c_str(), "bigFont.fnt");
-		label->setPosition(ccp(200, 200));
-		addChild(label);
 
-		return true;
+constexpr int CIRCLE_ID = 1764;
+
+
+
+void addCircle(LevelEditorLayer* self, const geometrize::ShapeResult& result)
+{
+	
+	geometrize::Circle* circle = dynamic_cast<geometrize::Circle*>(result.shape.get());
+	
+	geometrize::rgba color = result.color;
+	
+	float h,s,v;
+	image2gd::RGBtoHSV(color.r, color.g, color.b, h, s, v);
+
+	std::string hsv_string = fmt::format("{:.2}a{:.2}a{:.2}a1a1", h, s, v);
+	
+	const float x = circle->m_x * DRAW_SCALE;
+	const float y = circle->m_y * DRAW_SCALE;
+	const float scale = circle->m_r * DRAW_SCALE / 4;
+	
+	//https://wyliemaster.github.io/gddocs/#/resources/client/level-components/level-object?id=level-object
+	std::string str = fmt::format(
+		"1,{},2,{},3,{},32,{},41,1,42,1,43,{},44,{},25,{},21,{},20,{}",
+		CIRCLE_ID, x, y, scale, hsv_string, hsv_string, Z_ORDER, COLOR_CHANNEL, Z_LAYER
+	);
+	//fmt::println("{}", str);
+	
+	self->addObjectFromString(str);
+	
+	if(Z_ORDER == 0)
+	{
+		ColorAction* colorAction = GameManager::sharedState()->getEditorLayer()->m_pLevelSettings->m_pEffectManager->getColorAction(COLOR_CHANNEL);
+		colorAction->m_color = { 0, 0, 0};
+	}
+	
+	Z_ORDER++;
+}
+
+void addShape(LevelEditorLayer* self, const geometrize::ShapeResult& result)
+{
+	switch(result.shape->getType())
+	{
+		case geometrize::ShapeTypes::CIRCLE: return addCircle(self, result);
+	}
+}
+
+void (__thiscall* LevelEditorLayer_updateO)(void* self, float dt);
+void __fastcall LevelEditorLayer_updateH(LevelEditorLayer* self, void* edx, float dt)
+{
+	if(PROCESSING_IMAGE)
+	{
+		SHAPE_LOCK.lock();
+		if(SHAPE_DATA.size() != 0)
+		{
+			for(geometrize::ShapeResult result : SHAPE_DATA)
+			{
+				addShape(self, result);
+			}
+			SHAPE_DATA.clear();
+		}
+		SHAPE_LOCK.unlock();
+	}
+	LevelEditorLayer_updateO(self, dt);
+}
+
+struct Callback
+{
+	void onImportImage(CCObject*)
+	{
+		if(!PROCESSING_IMAGE)
+		{
+			Z_ORDER = 0;
+			std::thread(image2gd::addImage).detach();
+		}
 	}
 };
 
-void MenuLayer_onNewgrounds(MenuLayer* self, CCObject* sender) {
-	//create and enter empty level
-	auto level = GJGameLevel::create();
-	CCDirector::sharedDirector()->replaceScene(CCTransitionFade::create(0.5f, PlayLayer::scene(level)));
+bool (__thiscall* LevelSettingsLayer_initO)(CCLayer* self, void* settings, void* editor);
+bool __fastcall LevelSettingsLayer_initH(CCLayer* self, void* edx, void* settings, void* editor)
+{
+	if(!LevelSettingsLayer_initO(self, settings, editor)) return false;
+	if(!self) return true;
+	
+	//fmt::println("test");
+	
+	auto winSize = CCDirector::sharedDirector()->getWinSize() / 2;
+	auto layer = (CCLayer*)self->getChildren()->objectAtIndex(0);
+	if(!layer) return true;
+	
+	auto menu = (CCMenu*)layer->getChildren()->objectAtIndex(1);
+	if(!menu) return true;
+	
+	auto spr = ButtonSprite::create("Import Image", 0, false, "goldFont.fnt", "GJ_button_01.png", 0, 1);
+	spr->setScale(0.65f);
+	auto btn = CCMenuItemSpriteExtra::create(spr, self, menu_selector(Callback::onImportImage));
+	btn->setPosition(menu->convertToNodeSpace({winSize.width - 100.0f, winSize.height - 130.0f}));
+	menu->addChild(btn);
+	return true;
+	
 }
 
-bool GJDropDownLayer_init(GJDropDownLayer* self, const char* title, float height) {
-	return matdash::orig<&GJDropDownLayer_init>(self, "my own title", height);
-}
 
-//static cocos function
-matdash::cc::c_decl<CCLabelBMFont*> CCLabelBMFont_create(const char* text, const char* fontfile) {
-	fmt::print("creating label with text: {}\n", text);
-    return matdash::orig<&CCLabelBMFont_create>(text, fontfile);
-}
+void mod_main(HMODULE)
+{
+	matdash::create_console();
+	MH_Initialize();
+	
+	//matdash breaks with update functions so im afraid to use it now
+	MH_CreateHook(
+		reinterpret_cast<void*>(base + 0x1632b0),
+		reinterpret_cast<void*>(&LevelEditorLayer_updateH),
+		reinterpret_cast<void**>(&LevelEditorLayer_updateO) // note the &, this gets the address of the variable
+	);
+	
+	MH_CreateHook(
+		reinterpret_cast<void*>(base + 0x170e50),
+		reinterpret_cast<void*>(&LevelSettingsLayer_initH),
+		reinterpret_cast<void**>(&LevelSettingsLayer_initO) // note the &, this gets the address of the variable
+	);
+	
+	
+	MH_EnableHook(MH_ALL_HOOKS);
 
-//speed hack
-void PlayLayer_update_(PlayLayer* self, float dt) {
-	// another way of specifying the calling convention
-	matdash::orig<&PlayLayer_update_, matdash::Thiscall>(self, dt * 0.5f);
-}
-
-void mod_main(HMODULE) {
-	
-	#ifdef USE_WIN32_CONSOLE
-		if(AllocConsole()) {
-			freopen("CONOUT$", "wt", stdout);
-			freopen("CONIN$", "rt", stdin);
-			freopen("CONOUT$", "w", stderr);
-			std::ios::sync_with_stdio(1);
-		}
-	#endif
-
-	matdash::add_hook<&MenuLayerMod::init_>(base + 0x1907b0);
-	matdash::add_hook<&MenuLayer_onNewgrounds>(base + 0x191e90);
-	matdash::add_hook<&GJDropDownLayer_init>(base + 0x113530);
-	
-	// another way of specifying the calling convention
-	matdash::add_hook<&PlayLayer_update_, matdash::Thiscall>(base + 0x2029c0);
-	
-	//hook cocos function
-	static auto cocos_addr = [](const char* symbol) -> auto {
-		static const auto module = GetModuleHandleA("libcocos2d.dll");
-		return GetProcAddress(module, symbol);
-	};
-	
-	matdash::add_hook<&CCLabelBMFont_create>(cocos_addr("?create@CCLabelBMFont@cocos2d@@SAPAV12@PBD0@Z"));
 }
