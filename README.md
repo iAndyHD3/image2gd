@@ -16,7 +16,7 @@ also inspired on [adaf's geometrize to gd](https://youtu.be/XD5QXuPL-fg)
 - Open level settings and click on import image
 - Select image and change settings
 - Wait for the image to process
-- Am info box will pop up when it's done
+- An info box will pop up when it's done
 
 ### Bugs / Suggestions
 Open an issue for bugs or suggestions
