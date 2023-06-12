@@ -12,6 +12,7 @@
 #include "geometrize/runner/imagerunneroptions.h"
 #include "geometrize/shape/circle.h"
 
+#include <fmt/format.h>
 
 auto _max(auto a, auto b) {
 	return a > b ? a : b;
@@ -116,10 +117,15 @@ geometrize::ShapeTypes shapeTypesForNames(const std::string& str)
 
 const char* getImagePath()
 {
-	auto f = pfd::open_file("Image to draw", pfd::path::home(), { "Image files(.png .jpg)", "*.png *.jpg", }, false);
-	for (auto const &name : f.result()) {
-		return name.c_str();
+	auto f = pfd::open_file("Image to draw", pfd::path::home(), { "Image files(.png .jpg)", "*.png *.jpg", }, false).result();
+	//fmt::println("vec: {}", fmt::join(f, ", "));
+	
+	if(f.empty()) return nullptr;
+	
+	if(const auto& str = f[0]; !str.empty()) {
+		return str.c_str();
 	}
+	return nullptr;
 }
 
 
@@ -132,7 +138,7 @@ void logShapeResult(std::size_t step, const geometrize::ShapeResult& result)
 			geometrize::rgba color = result.color;
 			auto circle = dynamic_cast<geometrize::Circle*>(result.shape.get());
 			//fmt::println("STEP: {} | Circle | x: {}, y: {}, r: {}, RGBA: {},{},{},{}",
-//			step, circle->m_x, circle->m_y, circle->m_r, color.r, color.g, color.b, color.a);
+			//step, circle->m_x, circle->m_y, circle->m_r, color.r, color.g, color.b, color.a);
 		}
 	}
 }
@@ -144,7 +150,41 @@ int _stoi(const std::string_view s) {
 	return ret;
 }
 
-constexpr const char* totalShapeCountPromt = 
+void image2gd::updateLabel(bool enabled)
+{
+	gd::EditorUI* ui = gd::EditorUI::get();
+	if(!ui) return;
+	
+	cocos2d::CCLabelBMFont* label = reinterpret_cast<cocos2d::CCLabelBMFont*>(ui->getChildByTag(33));
+	if(!label)
+	{
+		auto winSize = cocos2d::CCDirector::sharedDirector()->getWinSize() / 2;
+		label = cocos2d::CCLabelBMFont::create("", "bigFont.fnt");
+		label->setPosition({winSize.width, winSize.height - 50.0f});
+		label->setTag(33);
+		ui->addChild(label);
+	}
+	
+	if(enabled)
+	{
+		float percentage;
+		if(STEP >= TOTAL_SHAPES) {
+			percentage = 100.0f;
+		}
+		else {
+			percentage = ((static_cast<float>(STEP) / static_cast<float>(TOTAL_SHAPES)) * 100);
+		}
+		std::string labelstr = fmt::format("{}/{} | {:.2}%", STEP, TOTAL_SHAPES, percentage);
+		label->setString(labelstr.c_str());
+		label->setVisible(true);
+	}
+	else
+	{
+		label->setVisible(false);
+	}
+}
+
+constexpr const char* TOTAL_SHAPESPromt = 
 	"The total shape count.\n"
 	" For smaller images, recommended 100-300\n"
 	" For bigger images, recommended > 500";
@@ -161,6 +201,9 @@ void image2gd::addImage()
 	SHAPE_LOCK.unlock();
 	
 	const char* inputImagePath = getImagePath();
+	if(!inputImagePath) return;
+	
+	//fmt::println("path: {}", inputImagePath);
 	const geometrize::Bitmap bitmap = readImage(inputImagePath);
 	if(bitmap.getWidth() == 0 || bitmap.getHeight() == 0)
 	{
@@ -181,8 +224,7 @@ void image2gd::addImage()
 		return true;
 	};
 	
-	int totalShapeCount = 0;
-	if(!handle_int_input(totalShapeCount, totalShapeCountPromt, "Total Shape Count", std::to_string(bitmap.getWidth() + bitmap.getHeight()))) {
+	if(!handle_int_input(TOTAL_SHAPES, TOTAL_SHAPESPromt, "Total Shape Count", std::to_string(bitmap.getWidth() + bitmap.getHeight()))) {
 		return;
 	}
 	
@@ -199,7 +241,7 @@ void image2gd::addImage()
 		return;
 	}
 	
-	//fmt::println("total: {}, stepCount: {}", totalShapeCount, stepShapeCount);
+	//fmt::println("total: {}, stepCount: {}", TOTAL_SHAPES, stepShapeCount);
 	
 	// the options for geometrizing the image
 	geometrize::ImageRunnerOptions options;
@@ -208,9 +250,25 @@ void image2gd::addImage()
 	options.shapeTypes = shapeTypesForNames("circle");
 	
 	geometrize::ImageRunner runner(bitmap);
+	STEP = 0;
+	updateLabel(true);
+	
 	PROCESSING_IMAGE = true;
-	for(std::size_t steps = 0; steps < totalShapeCount; steps++)
+	if(BTN_SPR) { 
+		BTN_SPR->setString("Stop current");
+	}
+	
+	int total = TOTAL_SHAPES + 2;
+
+	for(STEP = 1; STEP < total; STEP++)
 	{
+		if(!PROCESSING_IMAGE || !gd::LevelEditorLayer::get()) {
+			if(BTN_SPR) {
+				BTN_SPR->setString("Import Image");
+			}
+			break;
+		}
+		
 		const std::vector<geometrize::ShapeResult> shapes{runner.step(options)};
 		for(const auto& result : shapes)
 		{
@@ -220,7 +278,7 @@ void image2gd::addImage()
 			{
 				case geometrize::ShapeTypes::CIRCLE:
 				{
-					logShapeResult(steps, result);
+					//logShapeResult(STEP, result);
 				}
 			}
 			SHAPE_LOCK.lock();
@@ -228,7 +286,7 @@ void image2gd::addImage()
 			SHAPE_LOCK.unlock();
 		}
 	}
+	updateLabel(false);
 	PROCESSING_IMAGE = false;
 	pfd::message("image2gd", "Image finished processing", pfd::choice::ok, pfd::icon::info);
 }
-
