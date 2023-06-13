@@ -9,6 +9,7 @@
 #include <gd.h>
 
 #include "image2gd.h"
+#include "ImportImagePopup.hpp"
 
 #include "geometrize/shape/circle.h"
 #include "geometrize/bitmap/rgba.h"
@@ -30,7 +31,7 @@ void addCircle(LevelEditorLayer* self, const geometrize::ShapeResult& result)
 	geometrize::rgba color = result.color;
 	
 	float h,s,v;
-	image2gd::RGBtoHSV(color.r, color.g, color.b, h, s, v);
+	RGBtoHSV(color.r, color.g, color.b, h, s, v);
 
 	std::string hsv_string = fmt::format("{:.2}a{:.2}a{:.2}a1a1", h, s, v);
 	
@@ -45,7 +46,7 @@ void addCircle(LevelEditorLayer* self, const geometrize::ShapeResult& result)
 	);
 	//fmt::println("{}", str);
 	self->addObjectFromString(str);
-	image2gd::updateLabel(STEP != (TOTAL_SHAPES + 1));
+	updateLabel(STEP != (TOTAL_SHAPES + 1));
 
 }
 
@@ -78,15 +79,17 @@ void __fastcall LevelEditorLayer_updateH(LevelEditorLayer* self, void* edx, floa
 
 struct Callback
 {
-	void onImportImage(CCObject*)
+	void onImportImage(CCObject* sender)
 	{
-		image2gd::updateLabel(false);
-		if(!PROCESSING_IMAGE) {
-			std::thread(image2gd::addImage).detach();
-		}
-		else {
-			PROCESSING_IMAGE = false;
-		}
+		CCNode* self = reinterpret_cast<CCNode*>(reinterpret_cast<CCNode*>(sender)->getUserObject());
+		self->addChild(ImportImagePopup::create());
+		//updateLabel(false);
+		//if(!PROCESSING_IMAGE) {
+		//	std::thread(addImage).detach();
+		//}
+		//else {
+		//	PROCESSING_IMAGE = false;
+		//}
 	}
 };
 
@@ -109,6 +112,7 @@ bool __fastcall LevelSettingsLayer_initH(CCLayer* self, void* edx, void* setting
 	
 	BTN_SPR = ButtonSprite::create(PROCESSING_IMAGE ? "Stop current" : "Import Image", 0, false, "goldFont.fnt", "GJ_button_01.png", 0, 1);
 	BTN_SPR->setScale(0.65f);
+	BTN_SPR->setUserObject(self);
 	auto btn = CCMenuItemSpriteExtra::create(BTN_SPR, self, menu_selector(Callback::onImportImage));
 	btn->setPosition(menu->convertToNodeSpace({winSize.width - 100.0f, winSize.height - 130.0f}));
 	menu->addChild(btn);
@@ -116,11 +120,14 @@ bool __fastcall LevelSettingsLayer_initH(CCLayer* self, void* edx, void* setting
 	
 }
 
-void (__thiscall* LevelSettingsLayer_onCloseO)(void* self, void* sender);
-void __fastcall LevelSettingsLayer_onCloseH(void* self, void* edx, void* sender)
+void (__thiscall* LevelSettingsLayer_onCloseO)(CCNode* self, void* sender);
+void __fastcall LevelSettingsLayer_onCloseH(CCNode* self, void* edx, void* sender)
 {
-	LevelSettingsLayer_onCloseO(self, sender);
-	BTN_SPR = nullptr;
+	//LevelSettingsLayer_onCloseO(self, sender);
+	//BTN_SPR = nullptr;
+	auto alert = ImportImagePopup::create();
+	//reinterpret_cast<CCNode*>(self->getChildren()->objectAtIndex(0))->addChild(alert);
+	alert->show();
 }
 
 void mod_main(HMODULE)
