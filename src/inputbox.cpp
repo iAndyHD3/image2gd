@@ -35,8 +35,8 @@ static string StringReplaceAll(string Str, string SubStr, string NewStr) {
   size_t Position = 0;
   const size_t SubLen = SubStr.length(), NewLen = NewStr.length();
   while ((Position = Str.find(SubStr, Position)) != string::npos) {
-    Str.replace(Position, SubLen, NewStr);
-    Position += NewLen;
+	Str.replace(Position, SubLen, NewStr);
+	Position += NewLen;
   }
   return Str;
 }
@@ -44,9 +44,9 @@ static string StringReplaceAll(string Str, string SubStr, string NewStr) {
 static string CPPNewLineToVBSNewLine(string NewLine) {
   size_t Position = 0;
   while (Position < NewLine.length()) {
-    if (NewLine[Position] == '\r' || NewLine[Position] == '\n')
-      NewLine.replace(Position, 2, "\" + vbNewLine + \"");
-    Position += 1;
+	if (NewLine[Position] == '\r' || NewLine[Position] == '\n')
+	  NewLine.replace(Position, 2, "\" + vbNewLine + \"");
+	Position += 1;
   }
   return NewLine;
 }
@@ -90,8 +90,8 @@ STDMETHODIMP_(ULONG) CSimpleScriptSite::AddRef() {
 
 STDMETHODIMP_(ULONG) CSimpleScriptSite::Release() {
   if (!InterlockedDecrement(&m_cRefCount)) {
-    delete this;
-    return 0;
+	delete this;
+	return 0;
   }
   return m_cRefCount;
 }
@@ -99,14 +99,14 @@ STDMETHODIMP_(ULONG) CSimpleScriptSite::Release() {
 STDMETHODIMP CSimpleScriptSite::QueryInterface(REFIID riid, void **ppvObject)
 {
   if (riid == IID_IUnknown || riid == IID_IActiveScriptSiteWindow) {
-    *ppvObject = (IActiveScriptSiteWindow*)this;
-    AddRef();
-    return NOERROR;
+	*ppvObject = (IActiveScriptSiteWindow*)this;
+	AddRef();
+	return NOERROR;
   }
   if (riid == IID_IActiveScriptSite) {
-    *ppvObject = (IActiveScriptSite*)this;
-    AddRef();
-    return NOERROR;
+	*ppvObject = (IActiveScriptSite*)this;
+	AddRef();
+	return NOERROR;
   }
   return E_NOINTERFACE;
 }
@@ -116,16 +116,16 @@ static bool HideInput = false;
 
 static LRESULT CALLBACK InputBoxProc(int nCode, WPARAM wParam, LPARAM lParam) {
   if (nCode < HC_ACTION)
-    return CallNextHookEx(hHook, nCode, wParam, lParam);
+	return CallNextHookEx(hHook, nCode, wParam, lParam);
   if (nCode = HCBT_ACTIVATE) {
-    if (HideInput == true) {
-      HWND TextBox = FindWindowExA((HWND)wParam, NULL, "Edit", NULL);
-      SendDlgItemMessageW((HWND)wParam, GetDlgCtrlID(TextBox), EM_SETPASSWORDCHAR, L'\x25cf', 0);
-    }
+	if (HideInput == true) {
+	  HWND TextBox = FindWindowExA((HWND)wParam, NULL, "Edit", NULL);
+	  SendDlgItemMessageW((HWND)wParam, GetDlgCtrlID(TextBox), EM_SETPASSWORDCHAR, L'\x25cf', 0);
+	}
   }
   if (nCode = HCBT_CREATEWND) {
-    if (!(GetWindowLongPtr((HWND)wParam, GWL_STYLE) & WS_CHILD))
-      SetWindowLongPtr((HWND)wParam, GWL_EXSTYLE, GetWindowLongPtr((HWND)wParam, GWL_EXSTYLE) | WS_EX_DLGMODALFRAME);
+	if (!(GetWindowLongPtr((HWND)wParam, GWL_STYLE) & WS_CHILD))
+	  SetWindowLongPtr((HWND)wParam, GWL_EXSTYLE, GetWindowLongPtr((HWND)wParam, GWL_EXSTYLE) | WS_EX_DLGMODALFRAME);
   }
   return CallNextHookEx(hHook, nCode, wParam, lParam);
 }
