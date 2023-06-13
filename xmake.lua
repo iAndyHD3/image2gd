@@ -49,6 +49,7 @@ target("image2gd") --dll name and target name
 	add_syslinks("Advapi32")
 	add_syslinks("User32")
 	add_syslinks("Shell32")
+	add_syslinks("Gdi32")
 
 	
 	--add minhook manually here since it doesnt seem to work when added with target

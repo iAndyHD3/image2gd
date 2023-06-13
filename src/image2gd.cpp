@@ -13,18 +13,19 @@
 #include "geometrize/shape/circle.h"
 
 #include <fmt/format.h>
-
-auto _max(auto a, auto b) {
-	return a > b ? a : b;
-}
-
-auto _min(auto a, auto b) {
-	return a < b ? a : b;
-}
+#include <charconv>
 
 
-void image2gd::RGBtoHSV(int r, int g, int b, float& h, float& s, float& v)
+void RGBtoHSV(int r, int g, int b, float& h, float& s, float& v)
 {
+	auto _max = [](auto a, auto b) -> auto {
+		return a > b ? a : b;
+	};
+
+	auto _min = [](auto a, auto b) -> auto {
+		return a < b ? a : b;
+	};
+
 	// Normalize RGB values to the range of 0 to 1
 	float r_normalized = r / 255.0;
 	float g_normalized = g / 255.0;
@@ -115,7 +116,72 @@ geometrize::ShapeTypes shapeTypesForNames(const std::string& str)
 }
 
 
-const char* getImagePath()
+
+geometrize::Bitmap readImageFromClipboard()
+{
+	if (!OpenClipboard(nullptr))
+	{
+		std::cout << "Failed to open clipboard." << std::endl;
+		return geometrize::Bitmap(0, 0, geometrize::rgba{0, 0, 0, 0});
+	}
+
+	HBITMAP hBitmap = static_cast<HBITMAP>(GetClipboardData(CF_BITMAP));
+	if (!hBitmap)
+	{
+		std::cout << "No image found on the clipboard." << std::endl;
+		CloseClipboard();
+		return geometrize::Bitmap(0, 0, geometrize::rgba{0, 0, 0, 0});
+	}
+
+	BITMAP win_bitmap;
+	if (!GetObject(hBitmap, sizeof(BITMAP), &win_bitmap))
+	{
+		std::cout << "Failed to retrieve bitmap information." << std::endl;
+		CloseClipboard();
+		return geometrize::Bitmap(0, 0, geometrize::rgba{0, 0, 0, 0});
+	}
+
+	HDC hdc = GetDC(nullptr);
+	HDC hMemDC = CreateCompatibleDC(hdc);
+	HBITMAP hOldBitmap = static_cast<HBITMAP>(SelectObject(hMemDC, hBitmap));
+
+	std::uint32_t image_w = static_cast<std::uint32_t>(win_bitmap.bmWidth);
+	std::uint32_t image_h = static_cast<std::uint32_t>(win_bitmap.bmHeight);
+	
+	geometrize::Bitmap bitmap(image_w, image_h, geometrize::rgba{0, 0, 0, 0});
+
+	for (std::uint32_t y = 0; y < image_h / 2; ++y)
+	{
+		for (std::uint32_t x = 0; x < image_w; ++x)
+		{
+			COLORREF topPixel = GetPixel(hMemDC, x, y);
+			COLORREF bottomPixel = GetPixel(hMemDC, x, image_h - y - 1);
+	
+			std::uint8_t topRed = GetRValue(topPixel);
+			std::uint8_t topGreen = GetGValue(topPixel);
+			std::uint8_t topBlue = GetBValue(topPixel);
+			std::uint8_t topAlpha = topPixel >> 24;
+	
+			std::uint8_t bottomRed = GetRValue(bottomPixel);
+			std::uint8_t bottomGreen = GetGValue(bottomPixel);
+			std::uint8_t bottomBlue = GetBValue(bottomPixel);
+			std::uint8_t bottomAlpha = bottomPixel >> 24;
+	
+			bitmap.setPixel(x, y, {bottomRed, bottomGreen, bottomBlue, bottomAlpha});
+			bitmap.setPixel(x, image_h - y - 1, {topRed, topGreen, topBlue, topAlpha});
+		}
+	}
+	
+	SelectObject(hMemDC, hOldBitmap);
+	DeleteDC(hMemDC);
+	ReleaseDC(nullptr, hdc);
+	CloseClipboard();
+	return bitmap;
+}
+
+
+
+const char* getImagePathDialog()
 {
 	auto f = pfd::open_file("Image to draw", pfd::path::home(), { "Image files(.png .jpg)", "*.png *.jpg", }, false).result();
 	//fmt::println("vec: {}", fmt::join(f, ", "));
@@ -137,20 +203,19 @@ void logShapeResult(std::size_t step, const geometrize::ShapeResult& result)
 		{
 			geometrize::rgba color = result.color;
 			auto circle = dynamic_cast<geometrize::Circle*>(result.shape.get());
-			//fmt::println("STEP: {} | Circle | x: {}, y: {}, r: {}, RGBA: {},{},{},{}",
-			//step, circle->m_x, circle->m_y, circle->m_r, color.r, color.g, color.b, color.a);
+			fmt::println("STEP: {} | Circle | x: {}, y: {}, r: {}, RGBA: {},{},{},{}",
+			step, circle->m_x, circle->m_y, circle->m_r, color.r, color.g, color.b, color.a);
 		}
 	}
 }
 
-#include <charconv>
 int _stoi(const std::string_view s) {
 	int ret = -1;
 	std::from_chars(s.data(),s.data() + s.size(), ret);
 	return ret;
 }
 
-void image2gd::updateLabel(bool enabled)
+void updateLabel(bool enabled)
 {
 	gd::EditorUI* ui = gd::EditorUI::get();
 	if(!ui) return;
@@ -194,20 +259,21 @@ constexpr const char* stepShapeCountPromt =
 	" For smaller images, recommended > 500\n"
 	" For bigger images, recommended < 500";
 
-void image2gd::addImage()
+void addImage()
 {
 	SHAPE_LOCK.lock();
 	SHAPE_DATA.clear();
 	SHAPE_LOCK.unlock();
 	
-	const char* inputImagePath = getImagePath();
-	if(!inputImagePath) return;
+	//const char* inputImagePath = getImagePathDialog();
+	//if(!inputImagePath) return;
 	
 	//fmt::println("path: {}", inputImagePath);
-	const geometrize::Bitmap bitmap = readImage(inputImagePath);
+	//const geometrize::Bitmap bitmap = readImage(inputImagePath);
+	const geometrize::Bitmap bitmap = readImageFromClipboard();
 	if(bitmap.getWidth() == 0 || bitmap.getHeight() == 0)
 	{
-		std::cout << "Failed to read input image from: " << inputImagePath;
+		//std::cout << "Failed to read input image from: " << inputImagePath;
 		return;
 	}
 	
@@ -274,13 +340,13 @@ void image2gd::addImage()
 		{
 			geometrize::rgba color = result.color;
 			
-			switch(result.shape->getType())
-			{
-				case geometrize::ShapeTypes::CIRCLE:
-				{
-					//logShapeResult(STEP, result);
-				}
-			}
+			//switch(result.shape->getType())
+			//{
+			//	case geometrize::ShapeTypes::CIRCLE:
+			//	{
+			//		logShapeResult(STEP, result);
+			//	}
+			//}
 			SHAPE_LOCK.lock();
 			std::copy(shapes.begin(), shapes.end(), std::back_inserter(SHAPE_DATA));
 			SHAPE_LOCK.unlock();
