@@ -22,9 +22,14 @@
 using namespace gd;
 using namespace cocos2d;
 
+//globals all in CAPS. image2gd.h
+
+void updateLabel();
 
 void addCircle(LevelEditorLayer* self, const geometrize::ShapeResult& result)
 {
+	if(!PROCESSING_IMAGE)
+		return;
 	
 	geometrize::Circle* circle = dynamic_cast<geometrize::Circle*>(result.shape.get());
 	
@@ -42,12 +47,65 @@ void addCircle(LevelEditorLayer* self, const geometrize::ShapeResult& result)
 	//https://wyliemaster.github.io/gddocs/#/resources/client/level-components/level-object?id=level-object
 	std::string str = fmt::format(
 		"1,{},2,{},3,{},32,{},41,1,42,1,43,{},44,{},25,{},21,{},20,{}",
-		CIRCLE_ID, x, y, scale, hsv_string, hsv_string, STEP, 1010, Z_LAYER
+		CIRCLE_ID, x, y, scale, hsv_string, hsv_string, DRAWN_SHAPES.load(), 1010, Z_LAYER
 	);
 	//fmt::println("{}", str);
 	self->addObjectFromString(str);
-	updateLabel(STEP != (TOTAL_SHAPES + 1));
+	DRAWN_SHAPES++;
+	//fmt::print("added shape | x: {}, y: {} | scale: {} | {}\n", x, y, DRAW_SCALE, DRAWN_SHAPES);
+	if(DRAWN_SHAPES == TOTAL_SHAPES)
+	{
+		PROCESSING_IMAGE = false;
+	}
+	
+	updateLabel();
+}
 
+
+void updateLabel()
+{
+	gd::EditorUI* ui = gd::EditorUI::get();
+	if(!ui) return;
+	
+	cocos2d::CCLabelBMFont* label = reinterpret_cast<cocos2d::CCLabelBMFont*>(ui->getChildByTag(33));
+	if(!label)
+	{
+		auto winSize = cocos2d::CCDirector::sharedDirector()->getWinSize() / 2;
+		label = cocos2d::CCLabelBMFont::create("", "bigFont.fnt");
+		label->setPosition({winSize.width, winSize.height - 50.0f});
+		label->setTag(33);
+		ui->addChild(label);
+	}
+	int drawn_shapes = DRAWN_SHAPES.load();
+	if(label && drawn_shapes > 0 && drawn_shapes < TOTAL_SHAPES)
+	{
+		float percentage = ((static_cast<float>(drawn_shapes) / static_cast<float>(TOTAL_SHAPES)) * 100);
+		std::string labelstr = fmt::format("{}/{} | {:.2}%", drawn_shapes, TOTAL_SHAPES, percentage);
+		label->setString(labelstr.c_str());
+		label->setVisible(true);
+	}
+	else
+	{
+		label->setVisible(false);
+	}
+}
+
+void hideLabel()
+{
+	gd::EditorUI* ui = gd::EditorUI::get();
+	if(!ui) return;
+	
+	cocos2d::CCLabelBMFont* label = reinterpret_cast<cocos2d::CCLabelBMFont*>(ui->getChildByTag(33));
+	if(!label)
+	{
+		auto winSize = cocos2d::CCDirector::sharedDirector()->getWinSize() / 2;
+		label = cocos2d::CCLabelBMFont::create("", "bigFont.fnt");
+		label->setPosition({winSize.width, winSize.height - 50.0f});
+		label->setTag(33);
+		ui->addChild(label);
+	}
+	if(label)
+	label->setVisible(false);
 }
 
 void addShape(LevelEditorLayer* self, const geometrize::ShapeResult& result)
@@ -61,7 +119,7 @@ void addShape(LevelEditorLayer* self, const geometrize::ShapeResult& result)
 void (__thiscall* LevelEditorLayer_updateO)(void* self, float dt);
 void __fastcall LevelEditorLayer_updateH(LevelEditorLayer* self, void* edx, float dt)
 {
-	if(PROCESSING_IMAGE)
+	if(PROCESSING_IMAGE) //technically not needed because hook gets enabled/disabled but left for security
 	{
 		SHAPE_LOCK.lock();
 		if(SHAPE_DATA.size() != 0)
@@ -71,9 +129,15 @@ void __fastcall LevelEditorLayer_updateH(LevelEditorLayer* self, void* edx, floa
 				addShape(self, result);
 			}
 			SHAPE_DATA.clear();
+			
+			if(DRAWN_SHAPES >= TOTAL_SHAPES)
+			{
+				PROCESSING_IMAGE = false;
+			}
 		}
 		SHAPE_LOCK.unlock();
 	}
+	
 	LevelEditorLayer_updateO(self, dt);
 }
 
@@ -81,15 +145,18 @@ struct Callback
 {
 	void onImportImage(CCObject* sender)
 	{
-		CCNode* self = reinterpret_cast<CCNode*>(reinterpret_cast<CCNode*>(sender)->getUserObject());
-		self->addChild(ImportImagePopup::create());
-		//updateLabel(false);
-		//if(!PROCESSING_IMAGE) {
-		//	std::thread(addImage).detach();
-		//}
-		//else {
-		//	PROCESSING_IMAGE = false;
-		//}
+		if(!PROCESSING_IMAGE)
+		{
+			ImportImagePopup::create()->show();
+		}
+		else
+		{
+			PROCESSING_IMAGE = false;
+			hideLabel();
+			auto btn = reinterpret_cast<gd::ButtonSprite*>(reinterpret_cast<CCNode*>(sender)->getChildren()->objectAtIndex(0));
+			btn->setString("Import Image");
+			disableUpdateHook();
+		}
 	}
 };
 
@@ -110,7 +177,8 @@ bool __fastcall LevelSettingsLayer_initH(CCLayer* self, void* edx, void* setting
 	auto menu = (CCMenu*)layer->getChildren()->objectAtIndex(1);
 	if(!menu) return true;
 	
-	BTN_SPR = ButtonSprite::create(PROCESSING_IMAGE ? "Stop current" : "Import Image", 0, false, "goldFont.fnt", "GJ_button_01.png", 0, 1);
+	const char* text = PROCESSING_IMAGE ? "Stop current" : "Import Image";
+	BTN_SPR = ButtonSprite::create(text, 0, false, "goldFont.fnt", "GJ_button_01.png", 0, 1);
 	BTN_SPR->setScale(0.65f);
 	BTN_SPR->setUserObject(self);
 	auto btn = CCMenuItemSpriteExtra::create(BTN_SPR, self, menu_selector(Callback::onImportImage));
@@ -118,16 +186,6 @@ bool __fastcall LevelSettingsLayer_initH(CCLayer* self, void* edx, void* setting
 	menu->addChild(btn);
 	return true;
 	
-}
-
-void (__thiscall* LevelSettingsLayer_onCloseO)(CCNode* self, void* sender);
-void __fastcall LevelSettingsLayer_onCloseH(CCNode* self, void* edx, void* sender)
-{
-	//LevelSettingsLayer_onCloseO(self, sender);
-	//BTN_SPR = nullptr;
-	auto alert = ImportImagePopup::create();
-	//reinterpret_cast<CCNode*>(self->getChildren()->objectAtIndex(0))->addChild(alert);
-	alert->show();
 }
 
 void mod_main(HMODULE)
@@ -141,11 +199,10 @@ void mod_main(HMODULE)
 		reinterpret_cast<void**>(&func##O)\
 	)
 	
-	HOOK(0x1632b0, LevelEditorLayer_update);
 	HOOK(0x170e50, LevelSettingsLayer_init);
-	HOOK(0x173ec0, LevelSettingsLayer_onClose);
-	
 	
 	MH_EnableHook(MH_ALL_HOOKS);
-
+	
+	
+	HOOK(LEVEL_EDITOR_LAYER__UPDATE, LevelEditorLayer_update); //this hook is enabled/disabled manually
 }

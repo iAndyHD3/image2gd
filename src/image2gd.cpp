@@ -15,6 +15,20 @@
 #include <fmt/format.h>
 #include <charconv>
 
+void enableUpdateHook()
+{
+	MH_EnableHook(reinterpret_cast<void*>(gd::base + LEVEL_EDITOR_LAYER__UPDATE));
+}
+
+void disableUpdateHook()
+{
+	MH_DisableHook(reinterpret_cast<void*>(gd::base + LEVEL_EDITOR_LAYER__UPDATE));
+}
+
+bool isValidBitmap(const geometrize::Bitmap& bitmap)
+{
+	return bitmap.getWidth() != 0 && bitmap.getHeight() != 0;
+}
 
 void RGBtoHSV(int r, int g, int b, float& h, float& s, float& v)
 {
@@ -67,6 +81,10 @@ std::string winInputBox(std::string_view promt, std::string_view title, std::str
 
 geometrize::Bitmap readImage(const std::string& filePath)
 {
+	if(filePath.empty()) {
+		return geometrize::Bitmap(0, 0, geometrize::rgba{0, 0, 0, 0});
+	}
+	
 	const char* path{filePath.c_str()};
 	int w = 0;
 	int h = 0;
@@ -115,8 +133,6 @@ geometrize::ShapeTypes shapeTypesForNames(const std::string& str)
 	return geometrize::ShapeTypes(combinedShapeTypes);
 }
 
-
-
 geometrize::Bitmap readImageFromClipboard()
 {
 	if (!OpenClipboard(nullptr))
@@ -149,7 +165,8 @@ geometrize::Bitmap readImageFromClipboard()
 	std::uint32_t image_h = static_cast<std::uint32_t>(win_bitmap.bmHeight);
 	
 	geometrize::Bitmap bitmap(image_w, image_h, geometrize::rgba{0, 0, 0, 0});
-
+	
+	//idk how to use win bitmap data
 	for (std::uint32_t y = 0; y < image_h / 2; ++y)
 	{
 		for (std::uint32_t x = 0; x < image_w; ++x)
@@ -161,14 +178,14 @@ geometrize::Bitmap readImageFromClipboard()
 			std::uint8_t topGreen = GetGValue(topPixel);
 			std::uint8_t topBlue = GetBValue(topPixel);
 			std::uint8_t topAlpha = topPixel >> 24;
-	
+			bitmap.setPixel(x, image_h - y - 1, {topRed, topGreen, topBlue, topAlpha});
+
 			std::uint8_t bottomRed = GetRValue(bottomPixel);
 			std::uint8_t bottomGreen = GetGValue(bottomPixel);
 			std::uint8_t bottomBlue = GetBValue(bottomPixel);
 			std::uint8_t bottomAlpha = bottomPixel >> 24;
 	
 			bitmap.setPixel(x, y, {bottomRed, bottomGreen, bottomBlue, bottomAlpha});
-			bitmap.setPixel(x, image_h - y - 1, {topRed, topGreen, topBlue, topAlpha});
 		}
 	}
 	
@@ -177,21 +194,7 @@ geometrize::Bitmap readImageFromClipboard()
 	ReleaseDC(nullptr, hdc);
 	CloseClipboard();
 	return bitmap;
-}
-
-
-
-const char* getImagePathDialog()
-{
-	auto f = pfd::open_file("Image to draw", pfd::path::home(), { "Image files(.png .jpg)", "*.png *.jpg", }, false).result();
-	//fmt::println("vec: {}", fmt::join(f, ", "));
 	
-	if(f.empty()) return nullptr;
-	
-	if(const auto& str = f[0]; !str.empty()) {
-		return str.c_str();
-	}
-	return nullptr;
 }
 
 
@@ -215,39 +218,12 @@ int _stoi(const std::string_view s) {
 	return ret;
 }
 
-void updateLabel(bool enabled)
-{
-	gd::EditorUI* ui = gd::EditorUI::get();
-	if(!ui) return;
-	
-	cocos2d::CCLabelBMFont* label = reinterpret_cast<cocos2d::CCLabelBMFont*>(ui->getChildByTag(33));
-	if(!label)
-	{
-		auto winSize = cocos2d::CCDirector::sharedDirector()->getWinSize() / 2;
-		label = cocos2d::CCLabelBMFont::create("", "bigFont.fnt");
-		label->setPosition({winSize.width, winSize.height - 50.0f});
-		label->setTag(33);
-		ui->addChild(label);
-	}
-	
-	if(enabled)
-	{
-		float percentage;
-		if(STEP >= TOTAL_SHAPES) {
-			percentage = 100.0f;
-		}
-		else {
-			percentage = ((static_cast<float>(STEP) / static_cast<float>(TOTAL_SHAPES)) * 100);
-		}
-		std::string labelstr = fmt::format("{}/{} | {:.2}%", STEP, TOTAL_SHAPES, percentage);
-		label->setString(labelstr.c_str());
-		label->setVisible(true);
-	}
-	else
-	{
-		label->setVisible(false);
-	}
+float _stof(const std::string_view s) {
+	float ret = -1.0f;
+	std::from_chars(s.data(),s.data() + s.size(), ret);
+	return ret;
 }
+
 
 constexpr const char* TOTAL_SHAPESPromt = 
 	"The total shape count.\n"
@@ -259,100 +235,38 @@ constexpr const char* stepShapeCountPromt =
 	" For smaller images, recommended > 500\n"
 	" For bigger images, recommended < 500";
 
-void addImage()
+void addImage(geometrize::Bitmap bitmap, int totalShapes, int shapesPerStep)
 {
+	if(bitmap.getWidth() == 0 || bitmap.getHeight() == 0)
+	{
+		return;
+	}
+	
+	geometrize::ImageRunnerOptions options;
+	options.shapeCount = shapesPerStep;
+	options.alpha = 255;
+	options.maxShapeMutations = 50;
+	options.shapeTypes = shapeTypesForNames("circle");
+	
+	geometrize::ImageRunner runner(bitmap);
+	
 	SHAPE_LOCK.lock();
 	SHAPE_DATA.clear();
 	SHAPE_LOCK.unlock();
 	
-	//const char* inputImagePath = getImagePathDialog();
-	//if(!inputImagePath) return;
-	
-	//fmt::println("path: {}", inputImagePath);
-	//const geometrize::Bitmap bitmap = readImage(inputImagePath);
-	const geometrize::Bitmap bitmap = readImageFromClipboard();
-	if(bitmap.getWidth() == 0 || bitmap.getHeight() == 0)
+	while(totalShapes > DRAWN_SHAPES)
 	{
-		//std::cout << "Failed to read input image from: " << inputImagePath;
-		return;
-	}
-	
-	//returns false if the user cancelled
-	auto handle_int_input = [](int& n, std::string promt, std::string title, std::string _default, int min = 1, int max = 2147483648) -> bool
-	{
-		do
+		if(!PROCESSING_IMAGE) //pause
 		{
-			std::string userInput = winInputBox(promt, title, _default);
-			if(userInput.empty()) return false;	
-			n = _stoi(userInput);
-		}
-		while(min > n && n > max);
-		return true;
-	};
-	
-	if(!handle_int_input(TOTAL_SHAPES, TOTAL_SHAPESPromt, "Total Shape Count", std::to_string(bitmap.getWidth() + bitmap.getHeight()))) {
-		return;
-	}
-	
-	int stepShapeCount = 0;
-	if(!handle_int_input(stepShapeCount, stepShapeCountPromt, "Step Shape Count", "300")) {
-		return;
-	}
-	
-	if(!handle_int_input(DRAW_SCALE, "The gd object scale, 1 for default", "Scale", "1")) {
-		return;
-	}
-	
-	if(!handle_int_input(Z_LAYER, "The gd z layer where objects will be created", "Z Layer", "0", 0)) {
-		return;
-	}
-	
-	//fmt::println("total: {}, stepCount: {}", TOTAL_SHAPES, stepShapeCount);
-	
-	// the options for geometrizing the image
-	geometrize::ImageRunnerOptions options;
-	options.shapeCount = stepShapeCount;
-	options.alpha = 255;
-	options.shapeTypes = shapeTypesForNames("circle");
-	
-	geometrize::ImageRunner runner(bitmap);
-	STEP = 0;
-	updateLabel(true);
-	
-	PROCESSING_IMAGE = true;
-	if(BTN_SPR) { 
-		BTN_SPR->setString("Stop current");
-	}
-	
-	int total = TOTAL_SHAPES + 2;
-
-	for(STEP = 1; STEP < total; STEP++)
-	{
-		if(!PROCESSING_IMAGE || !gd::LevelEditorLayer::get()) {
-			if(BTN_SPR) {
-				BTN_SPR->setString("Import Image");
-			}
 			break;
 		}
-		
 		const std::vector<geometrize::ShapeResult> shapes{runner.step(options)};
-		for(const auto& result : shapes)
+		SHAPE_LOCK.lock();
+		for(const auto& shape : shapes)
 		{
-			geometrize::rgba color = result.color;
-			
-			//switch(result.shape->getType())
-			//{
-			//	case geometrize::ShapeTypes::CIRCLE:
-			//	{
-			//		logShapeResult(STEP, result);
-			//	}
-			//}
-			SHAPE_LOCK.lock();
-			std::copy(shapes.begin(), shapes.end(), std::back_inserter(SHAPE_DATA));
-			SHAPE_LOCK.unlock();
+			SHAPE_DATA.push_back(shape);
 		}
+		SHAPE_LOCK.unlock();
 	}
-	updateLabel(false);
-	PROCESSING_IMAGE = false;
-	pfd::message("image2gd", "Image finished processing", pfd::choice::ok, pfd::icon::info);
+	disableUpdateHook();
 }

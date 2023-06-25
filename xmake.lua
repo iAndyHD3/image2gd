@@ -45,16 +45,24 @@ target("image2gd") --dll name and target name
 	add_deps("gd.h")
 	set_rundir("/bin")
 	add_files("src/*.cpp")
-	add_syslinks("Comdlg32")
-	add_syslinks("Advapi32")
-	add_syslinks("User32")
-	add_syslinks("Shell32")
-	add_syslinks("Gdi32")
+	add_syslinks("Comdlg32") --nfd
+	add_syslinks("Gdi32") --clipboard, windows bitmap
 
 	
 	--add minhook manually here since it doesnt seem to work when added with target
-	add_includedirs("libs/minhook/include", "libs/stb", "libs/geometrize")
-	add_files("libs/minhook/src/**.c", "libs/geometrize/**.cpp")
+	add_includedirs(
+		"libs/minhook/include",
+		"libs/stb",
+		"libs/geometrize",
+		"libs/nfd/include"
+	)
+	
+	add_files(
+		"libs/minhook/src/**.c",
+		"libs/geometrize/**.cpp",
+		"libs/nfd/src/**.cpp",
+		"libs/nfd/src/**.c"
+	)
 	
 	--this will run when xmake run gdmod is called
 	on_run(function (target)
