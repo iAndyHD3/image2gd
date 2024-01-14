@@ -5,7 +5,7 @@
 
 ![2.2 swing wip image](https://cdn.discordapp.com/attachments/651480005536383009/1116882329793744916/image.png)
 
-## Download
+## Download (2.1 only!)
 
 [Releases](https://github.com/iAndyHD3/image2gd/releases/latest)
 
